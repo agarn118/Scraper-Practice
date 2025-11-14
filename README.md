@@ -42,13 +42,15 @@ You can type things like `milk`, `cheese`, or even typo-heavy queries like `mill
 
 ## Repository Structure
 
+```text
+Scraper-Practice/
 ├── app.py                 # Flask app that serves index.html, script.js, style.css, products.json
 ├── build_frontend_json.py # Normalizes product_info.jsonl → products.json
-├── walmart_scraper.py     # Scraper that hits Walmart.ca and writes product_info.jsonl
-├── jsonl_to_sqlite.py     # (optional) Convert JSONL to SQLite DB
-├── view_products_db.py    # (optional) SQLite viewer / helper
-├── product_info.jsonl     # Raw scraped product data (one JSON per line)
-├── products.json          # Cleaned & deduplicated products for frontend
+├── walmart_scraper.py     # Playwright-based scraper that hits Walmart.ca and writes product_info.jsonl
+├── jsonl_to_sqlite.py     # (optional) Convert JSONL to a SQLite database
+├── view_products_db.py    # (optional) Helper to inspect/query the SQLite DB
+├── product_info.jsonl     # Raw scraped product data (one JSON object per line)
+├── products.json          # Cleaned & deduplicated products for the frontend (used by script.js)
 ├── index.html             # SmartSave UI shell
-├── style.css              # Styling for layout, cards, modal, etc.
-└── script.js              # Client-side search, scoring, modal logic
+├── style.css              # Styling for layout, cards, modal, modal overlay, etc.
+└── script.js              # Client-side search, scoring, fuzzy matching, and modal logic
