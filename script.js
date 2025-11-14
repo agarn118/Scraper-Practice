@@ -1,30 +1,15 @@
-// SmartSave frontend – fuzzy search + relevance + product detail modal
+// script.js – SmartSave frontend (products.json client-side search + modal)
 
-(function () {
-  const searchForm = document.getElementById("searchForm");
-  const searchInput = document.getElementById("searchInput");
-  const summaryEl = document.getElementById("summary");
-  const resultsEl = document.getElementById("results");
-
-  // Detail modal elements
-  const overlayEl = document.getElementById("detailOverlay");
-  const overlayBackdrop = overlayEl.querySelector(".detail-backdrop");
-  const closeBtn = document.getElementById("detailClose");
-  const detailImage = document.getElementById("detailImage");
-  const detailTitle = document.getElementById("detailTitle");
-  const detailBrand = document.getElementById("detailBrand");
-  const detailPrice = document.getElementById("detailPrice");
-  const detailUnit = document.getElementById("detailUnit");
-  const detailRating = document.getElementById("detailRating");
-  const detailCategory = document.getElementById("detailCategory");
-  const detailExternalLink = document.getElementById("detailExternalLink");
+(() => {
+  const PRODUCTS_URL = "products.json";
 
   let allProducts = [];
+  let normalizedProducts = [];
+  let lastQuery = "";
 
-  // ---------- Helpers ----------
+  // ---------- Utility helpers ----------
 
-  function escapeHtml(str) {
-    if (!str) return "";
+  function escapeHtml(str = "") {
     return String(str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -33,43 +18,21 @@
       .replace(/'/g, "&#39;");
   }
 
-  function parsePrice(value) {
-    if (typeof value === "number") return value;
-    if (!value) return NaN;
-    const cleaned = String(value).replace(/[^\d.,]/g, "").replace(",", ".");
-    const num = parseFloat(cleaned);
-    return Number.isFinite(num) ? num : NaN;
+  function toNumber(val) {
+    if (typeof val === "number") return val;
+    if (val == null) return null;
+    const n = parseFloat(String(val).replace(/[^\d.-]/g, ""));
+    return Number.isFinite(n) ? n : null;
   }
 
-  function getTitle(p) {
-    return p.title || p.product_name || p.name || "";
+  function tokenize(str = "") {
+    return str
+      .toLowerCase()
+      .split(/[^a-z0-9%]+/g)
+      .filter(Boolean);
   }
 
-  function getBrand(p) {
-    return p.brand || "";
-  }
-
-  function getCategory(p) {
-    return p.category || "";
-  }
-
-  function getImage(p) {
-    return p.image || p.image_url || "";
-  }
-
-  function getUrl(p) {
-    return p.url || p.product_url || p.link || "";
-  }
-
-  function getRating(p) {
-    return p.avg_rating || p.rating || null;
-  }
-
-  function getReviewCount(p) {
-    return p.review_count || p.num_reviews || p.reviews || null;
-  }
-
-  // Levenshtein distance for typo tolerance
+  // Simple Levenshtein distance for fuzzy matching (typos)
   function levenshtein(a, b) {
     a = a.toLowerCase();
     b = b.toLowerCase();
@@ -82,285 +45,484 @@
     for (let j = 0; j <= n; j++) dp[j] = j;
 
     for (let i = 1; i <= m; i++) {
-      let prev = i;
+      let prev = dp[0];
+      dp[0] = i;
       for (let j = 1; j <= n; j++) {
-        const temp = dp[j];
+        const tmp = dp[j];
         const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        dp[j] = Math.min(dp[j] + 1, prev + 1, dp[j - 1] + cost);
-        prev = temp;
+        dp[j] = Math.min(
+          dp[j] + 1, // deletion
+          dp[j - 1] + 1, // insertion
+          prev + cost // substitution
+        );
+        prev = tmp;
       }
     }
     return dp[n];
   }
 
-  // Score a product for a query (higher is better)
-  function scoreProduct(product, query, terms) {
-    const title = getTitle(product).toLowerCase();
-    const brand = getBrand(product).toLowerCase();
-    const category = getCategory(product).toLowerCase();
+  // Slugify product name for Walmart URL (only cosmetic; ID is what matters)
+  function slugify(name = "") {
+    return name
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "item";
+  }
 
-    const haystack = `${title} ${brand} ${category}`.trim();
-    if (!haystack) return 0;
+  // Try to find an explicit URL field on the raw object
+  function explicitUrlFromRaw(raw) {
+    const candidates = [
+      raw.url,
+      raw.product_url,
+      raw.productUrl,
+      raw.product_page,
+      raw.page_url,
+      raw.link,
+      raw.href,
+      raw.canonical_url
+    ];
+    for (const u of candidates) {
+      if (typeof u === "string" && u.startsWith("http")) return u;
+    }
+    // Sometimes scraper stores relative URLs like "/en/ip/..."
+    if (typeof raw.relative_url === "string") {
+      const rel = raw.relative_url;
+      if (rel.startsWith("http")) return rel;
+      if (rel.startsWith("/")) return "https://www.walmart.ca" + rel;
+    }
+    return null;
+  }
+
+  // Build a Walmart.ca product URL if we at least know item_id
+  function walmartUrlFromIdAndName(itemId, name) {
+    if (!itemId) return null;
+    const slug = slugify(name || "");
+    return `https://www.walmart.ca/en/ip/${slug}/${itemId}`;
+  }
+
+  // Derive the best store URL for a product (raw + normalized info)
+  function deriveStoreUrl(raw, name, id) {
+    const explicit = explicitUrlFromRaw(raw);
+    if (explicit) return explicit;
+
+    const itemId = raw.item_id || id;
+    if (itemId) return walmartUrlFromIdAndName(itemId, name);
+
+    return null;
+  }
+
+  // Normalize raw product into a consistent shape
+  function normalizeProduct(raw, index) {
+    const name = raw.product_name || raw.name || "";
+    const brand = raw.brand || "";
+    const category = raw.category || raw.category_path || "";
+    const image =
+      raw.image_url || raw.image || raw.thumbnail || raw.img || "";
+
+    const price = toNumber(raw.price);
+    const rating =
+      toNumber(raw.avg_rating ?? raw.rating ?? raw.star_rating) ?? null;
+    const reviewCount =
+      toNumber(
+        raw.review_count ?? raw.num_reviews ?? raw.reviews ?? raw.reviewCount
+      ) ?? null;
+
+    const description =
+      raw.short_description ||
+      raw.description ||
+      raw.desc ||
+      "";
+
+    const queries = raw.search_queries || raw.queries || [];
+
+    const id =
+      raw.item_id ||
+      raw.id ||
+      raw.sku ||
+      raw.productId ||
+      `idx-${index}`;
+
+    const url = deriveStoreUrl(raw, name, id);
+
+    return {
+      id,
+      name,
+      brand,
+      category,
+      image,
+      price,
+      rating,
+      reviewCount,
+      description,
+      queries,
+      url,
+      _raw: raw
+    };
+  }
+
+  // ---------- Scoring / search ----------
+
+  function scoreProduct(prod, query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return 0;
+
+    const qTokens = tokenize(q);
+    if (!qTokens.length) return 0;
+
+    const name = prod.name.toLowerCase();
+    const brand = prod.brand.toLowerCase();
+    const category = prod.category.toLowerCase();
+    const extra = (prod.queries || []).join(" ").toLowerCase();
+
+    const nameTokens = tokenize(name);
+    const brandTokens = tokenize(brand);
+    const catTokens = tokenize(category);
 
     let score = 0;
 
-    // Whole-query matches
-    if (title.includes(query)) score += 40;
-    if (brand.includes(query)) score += 25;
-    if (category.includes(query)) score += 10;
+    for (const qt of qTokens) {
+      // Exact word matches – strongest signal
+      if (nameTokens.includes(qt)) score += 200;
+      if (brandTokens.includes(qt)) score += 180;
+      if (catTokens.includes(qt)) score += 140;
 
-    const words = haystack.split(/\s+/);
+      // Substring matches
+      if (!nameTokens.includes(qt) && name.includes(qt)) score += 80;
+      if (!brandTokens.includes(qt) && brand.includes(qt)) score += 60;
+      if (!catTokens.includes(qt) && category.includes(qt)) score += 50;
 
-    for (const term of terms) {
-      if (!term) continue;
+      if (extra.includes(qt)) score += 40;
 
-      if (title.includes(term)) score += 25;
-      if (brand.includes(term)) score += 15;
-      if (category.includes(term)) score += 10;
-
-      // Fuzzy match against each word
+      // Fuzzy matches for typos (e.g. "millk" → "milk")
       let best = Infinity;
-      for (const w of words) {
-        if (!w) continue;
-        const d = levenshtein(term, w);
-        if (d < best) best = d;
+      const pools = [nameTokens, brandTokens, catTokens];
+      for (const pool of pools) {
+        for (const tok of pool) {
+          const d = levenshtein(qt, tok);
+          if (d < best) best = d;
+        }
       }
-
-      if (best === 0) {
-        score += 15;
-      } else if (best === 1) {
-        score += 10;
-      } else if (best === 2 && term.length >= 5) {
-        score += 5;
-      }
+      if (best === 1) score += 80;
+      else if (best === 2) score += 40;
     }
 
-    if (score <= 0) return 0;
+    // Slight preference for cheaper items as a tie-breaker
+    if (prod.price != null) {
+      score += Math.max(0, 20 - Math.log10(prod.price + 1) * 5);
+    }
 
     return score;
   }
 
-  // ---------- Rendering ----------
+  function searchProducts(query) {
+    query = (query || "").trim();
+    if (!query) return [];
 
-  function createProductCard(product, isTopMatch) {
-    const title = getTitle(product);
-    const brand = getBrand(product);
-    const category = getCategory(product);
-    const priceNum = parsePrice(product.price);
-    const image = getImage(product);
-    const rating = getRating(product);
-    const reviewCount = getReviewCount(product);
+    const scored = normalizedProducts
+      .map((p) => ({
+        product: p,
+        score: scoreProduct(p, query)
+      }))
+      .filter((x) => x.score > 0);
 
-    const card = document.createElement("article");
-    card.className = "product-card";
-    if (isTopMatch) card.classList.add("highlight");
-
-    card.innerHTML = `
-      <div class="product-image-wrap">
-        ${
-          image
-            ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(
-                title || "Product image"
-              )}" loading="lazy" />`
-            : ""
-        }
-      </div>
-      <div class="product-body">
-        <h2 class="product-title">${escapeHtml(title)}</h2>
-        <p class="product-brand">${escapeHtml(brand || "")}</p>
-        <p class="product-price">${
-          Number.isFinite(priceNum) ? `$${priceNum.toFixed(2)}` : ""
-        }</p>
-        <div class="product-meta">
-          <span class="rating">
-            ${
-              rating
-                ? `<span class="rating-star">★</span>${Number(rating).toFixed(
-                    1
-                  )}${
-                    reviewCount
-                      ? ` <span class="rating-count">(${reviewCount})</span>`
-                      : ""
-                  }`
-                : ""
-            }
-          </span>
-          ${
-            category
-              ? `<span class="category-pill">${escapeHtml(
-                  String(category).toLowerCase()
-                )}</span>`
-              : ""
-          }
-        </div>
-      </div>
-    `;
-
-    card.addEventListener("click", () => {
-      openDetail(product);
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const pa = a.product.price ?? Infinity;
+      const pb = b.product.price ?? Infinity;
+      return pa - pb;
     });
 
-    return card;
+    return scored.map((x) => x.product);
   }
 
-  function renderResults(scored, query) {
+  // ---------- DOM references for search/results ----------
+
+  const searchInput = document.getElementById("searchInput");
+  const searchForm = document.getElementById("searchForm");
+  const searchSummary = document.getElementById("searchSummary");
+  const resultsEl = document.getElementById("results");
+
+  // ---------- Modal elements (created if missing) ----------
+
+  let modalOverlay,
+    modalImage,
+    modalTitle,
+    modalBrand,
+    modalPrice,
+    modalRating,
+    modalCategory,
+    modalDescription,
+    modalCloseBtn,
+    modalLink;
+
+  function ensureModal() {
+    modalOverlay = document.getElementById("modalOverlay");
+
+    // If there is no modal in the HTML, build it now
+    if (!modalOverlay) {
+      modalOverlay = document.createElement("div");
+      modalOverlay.id = "modalOverlay";
+      modalOverlay.className = "modal-overlay";
+      modalOverlay.innerHTML = `
+        <div class="modal-backdrop"></div>
+        <div class="product-modal">
+          <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+          <div class="modal-body">
+            <div class="modal-image-wrap">
+              <img id="modalImage" src="" alt="Product image">
+            </div>
+            <div class="modal-content">
+              <h2 id="modalTitle"></h2>
+              <p id="modalBrand" class="modal-brand"></p>
+              <p id="modalPrice" class="modal-price"></p>
+              <p id="modalRating" class="modal-rating"></p>
+              <p id="modalCategory" class="modal-category"></p>
+              <p id="modalDescription" class="modal-description"></p>
+              <a id="modalLink"
+                 class="modal-link"
+                 href="#"
+                 target="_blank"
+                 rel="noopener noreferrer">
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modalOverlay);
+    }
+
+    // Grab references
+    modalImage = document.getElementById("modalImage");
+    modalTitle = document.getElementById("modalTitle");
+    modalBrand = document.getElementById("modalBrand");
+    modalPrice = document.getElementById("modalPrice");
+    modalRating = document.getElementById("modalRating");
+    modalCategory = document.getElementById("modalCategory");
+    modalDescription = document.getElementById("modalDescription");
+    modalCloseBtn = document.getElementById("modalClose");
+    modalLink = document.getElementById("modalLink");
+
+    // In case modal existed but had no link, ensure there is one
+    if (!modalLink) {
+      const content = document.querySelector(".modal-content");
+      if (content) {
+        modalLink = document.createElement("a");
+        modalLink.id = "modalLink";
+        modalLink.className = "modal-link";
+        modalLink.target = "_blank";
+        modalLink.rel = "noopener noreferrer";
+        content.appendChild(modalLink);
+      }
+    }
+
+    // Wire events only once
+    if (modalOverlay && !modalOverlay._wired) {
+      modalOverlay._wired = true;
+
+      modalOverlay.addEventListener("click", (e) => {
+        if (
+          e.target === modalOverlay ||
+          e.target.classList.contains("modal-backdrop")
+        ) {
+          closeModal();
+        }
+      });
+
+      if (modalCloseBtn) {
+        modalCloseBtn.addEventListener("click", closeModal);
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
+    }
+  }
+
+  // ---------- Rendering ----------
+
+  function renderResults(query, products) {
     resultsEl.innerHTML = "";
 
     if (!query) {
-      summaryEl.textContent =
+      searchSummary.textContent =
         "Type a search term above to browse your scraped Walmart catalog.";
       return;
     }
 
-    if (!scored.length) {
-      summaryEl.textContent = `No products found for "${query}". Try another search term.`;
+    if (!products.length) {
+      searchSummary.textContent = `No products found for "${query}". Try a different word (or fix typos).`;
+      const div = document.createElement("div");
+      div.className = "empty-state";
+      div.textContent = "No matching products in your current dataset.";
+      resultsEl.appendChild(div);
       return;
     }
 
-    const MAX_SHOW = 500;
-    const shown = scored.slice(0, MAX_SHOW);
+    searchSummary.textContent = `${products.length} products found for "${query}". Sorted by best match, then lowest price.`;
 
-    const queryText =
-      scored.length === 1
-        ? `1 product found for "${query}".`
-        : `${scored.length} products found for "${query}".`;
+    for (const prod of products) {
+      const card = document.createElement("article");
+      card.className = "product-card";
+      card.dataset.id = prod.id;
 
-    summaryEl.textContent = `${queryText} Sorted by best match, then lowest price.`;
+      const priceText =
+        prod.price != null ? `$${prod.price.toFixed(2)}` : "Price unavailable";
 
-    shown.forEach((entry, index) => {
-      const card = createProductCard(entry.product, index === 0);
+      const brandText = prod.brand || "";
+      const categoryText = prod.category || "";
+
+      const imgHtml = prod.image
+        ? `<img src="${escapeHtml(prod.image)}" alt="${escapeHtml(
+            prod.name || "Product image"
+          )}" loading="lazy">`
+        : "";
+
+      card.innerHTML = `
+        <div class="card-inner">
+          <div class="product-image-wrap">
+            ${imgHtml}
+          </div>
+          <div class="product-info">
+            <h3 class="product-title">${escapeHtml(prod.name)}</h3>
+            ${
+              brandText
+                ? `<p class="product-brand">${escapeHtml(brandText)}</p>`
+                : ""
+            }
+            <p class="product-price">${priceText}</p>
+            ${
+              categoryText
+                ? `<p class="product-category">${escapeHtml(
+                    categoryText.toLowerCase()
+                  )}</p>`
+                : ""
+            }
+          </div>
+        </div>
+      `;
+
+      // Card click -> modal
+      card.addEventListener("click", () => openModal(prod));
       resultsEl.appendChild(card);
-    });
+    }
   }
 
-  // ---------- Detail modal ----------
+  // ---------- Modal behaviour ----------
 
-  function openDetail(product) {
-    const title = getTitle(product) || "Product";
-    const brand = getBrand(product);
-    const category = getCategory(product);
-    const priceNum = parsePrice(product.price);
-    const unit = product.price_per_unit || "";
-    const rating = getRating(product);
-    const reviews = getReviewCount(product);
-    const image = getImage(product);
-    const url = getUrl(product);
+  function openModal(prod) {
+    ensureModal();
+    if (!modalOverlay) return;
 
-    if (image) {
-      detailImage.src = image;
-      detailImage.style.visibility = "visible";
-    } else {
-      detailImage.removeAttribute("src");
-      detailImage.style.visibility = "hidden";
+    // Image
+    if (modalImage) {
+      if (prod.image) {
+        modalImage.src = prod.image;
+        modalImage.alt = prod.name || "Product image";
+      } else {
+        modalImage.src = "";
+        modalImage.alt = "Product image not available";
+      }
     }
 
-    detailTitle.textContent = title;
-    detailBrand.textContent = brand ? `by ${brand}` : "";
-    detailPrice.textContent = Number.isFinite(priceNum)
-      ? `$${priceNum.toFixed(2)}`
-      : "";
-    detailUnit.textContent = unit || "";
+    // Text fields
+    if (modalTitle) modalTitle.textContent = prod.name || "Product";
+    if (modalBrand)
+      modalBrand.textContent = prod.brand ? `by ${prod.brand}` : "";
 
-    if (rating) {
-      detailRating.textContent = `Rating: ${Number(rating).toFixed(1)}★${
-        reviews ? ` (${reviews} review${reviews === 1 ? "" : "s"})` : ""
-      }`;
-    } else {
-      detailRating.textContent = "";
+    if (modalPrice) {
+      modalPrice.textContent =
+        prod.price != null ? `$${prod.price.toFixed(2)}` : "";
     }
 
-    detailCategory.textContent = category
-      ? `Category: ${String(category)}`
-      : "";
-
-    if (url) {
-      detailExternalLink.href = url;
-      detailExternalLink.style.display = "inline-flex";
-    } else {
-      detailExternalLink.href = "#";
-      detailExternalLink.style.display = "none";
+    if (modalRating) {
+      if (prod.rating != null) {
+        const ratingStr = prod.rating.toFixed(1);
+        const reviews =
+          prod.reviewCount != null ? ` (${prod.reviewCount} reviews)` : "";
+        modalRating.textContent = `Rating: ${ratingStr}★${reviews}`;
+      } else {
+        modalRating.textContent = "";
+      }
     }
 
-    overlayEl.classList.remove("hidden");
+    if (modalCategory)
+      modalCategory.textContent = prod.category || "";
+
+    if (modalDescription)
+      modalDescription.textContent = prod.description || "";
+
+    // Little Walmart button under description
+    if (modalLink) {
+      const url = prod.url;
+      if (url) {
+        modalLink.href = url;
+        modalLink.innerHTML = `
+          <span class="walmart-spark">✦</span>
+          <span>View on Walmart</span>
+        `;
+        modalLink.style.display = "inline-flex";
+      } else {
+        modalLink.style.display = "none";
+      }
+    }
+
+    modalOverlay.classList.add("is-visible");
     document.body.classList.add("modal-open");
   }
 
-  function closeDetail() {
-    overlayEl.classList.add("hidden");
+  function closeModal() {
+    if (!modalOverlay) return;
+    modalOverlay.classList.remove("is-visible");
     document.body.classList.remove("modal-open");
   }
 
-  // ---------- Search / events ----------
+  // ---------- Search events ----------
 
-  function performSearch(rawQuery) {
-    const query = (rawQuery || "").trim();
-    const qLower = query.toLowerCase();
-
-    if (!qLower) {
-      renderResults([], "");
-      return;
-    }
-
-    const terms = qLower.split(/\s+/).filter(Boolean);
-
-    const scored = [];
-    for (const product of allProducts) {
-      const score = scoreProduct(product, qLower, terms);
-      if (score <= 0) continue;
-
-      const priceNum = parsePrice(product.price);
-      scored.push({
-        product,
-        score,
-        price: Number.isFinite(priceNum) ? priceNum : Infinity,
-      });
-    }
-
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.price - b.price;
+  if (searchForm && searchInput) {
+    searchForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = searchInput.value || "";
+      lastQuery = q;
+      const results = searchProducts(q);
+      renderResults(q, results);
     });
 
-    renderResults(scored, query);
+    // Live search with small debounce
+    let typingTimer = null;
+    searchInput.addEventListener("input", () => {
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        const q = searchInput.value || "";
+        lastQuery = q;
+        const results = searchProducts(q);
+        renderResults(q, results);
+      }, 180);
+    });
   }
 
-  async function loadProducts() {
+  // ---------- Init: load products.json ----------
+
+  async function init() {
+    ensureModal(); // make sure the modal exists & events are wired
+
     try {
-      const res = await fetch("products.json");
+      const res = await fetch(PRODUCTS_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (Array.isArray(data)) return data;
-      if (Array.isArray(data.items)) return data.items;
-      console.warn("Unexpected products.json format; using empty list.");
-      return [];
+
+      allProducts = Array.isArray(data.items) ? data.items : [];
+      normalizedProducts = allProducts.map(normalizeProduct);
+
+      renderResults("", []); // initial empty state
     } catch (err) {
       console.error("Failed to load products.json:", err);
-      summaryEl.textContent =
-        "Failed to load products.json. Make sure the file is next to index.html.";
-      return [];
+      if (searchSummary) {
+        searchSummary.textContent =
+          "Failed to load products.json. Check that it exists next to app.py and Flask is running.";
+      }
     }
   }
 
-  // ---------- Wire up events & init ----------
-
-  searchForm.addEventListener("submit", (evt) => {
-    evt.preventDefault();
-    performSearch(searchInput.value);
-  });
-
-  // Close modal handlers
-  closeBtn.addEventListener("click", closeDetail);
-  overlayBackdrop.addEventListener("click", closeDetail);
-  window.addEventListener("keydown", (evt) => {
-    if (evt.key === "Escape" && !overlayEl.classList.contains("hidden")) {
-      closeDetail();
-    }
-  });
-
-  // Initial load
-  (async function init() {
-    allProducts = await loadProducts();
-    // You can optionally pre-populate with "milk" etc. here if you like
-    // performSearch("milk");
-  })();
+  init();
 })();

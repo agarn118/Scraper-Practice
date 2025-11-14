@@ -7,76 +7,34 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="page">
-    <!-- Hero / search bar -->
-    <section class="hero">
-      <div class="hero-inner">
-        <h1 class="logo">
-          Smart<span>Save</span>
-        </h1>
-        <p class="tagline">
+  <main class="app-shell">
+    <section class="hero-card">
+      <header class="hero-header">
+        <div class="logo">Smart<span>Save</span></div>
+        <p class="hero-subtitle">
           Search your scraped Walmart catalog by product name or brand.
         </p>
+      </header>
 
-        <form id="searchForm" class="search-form">
+      <form id="searchForm" class="search-form">
+        <div class="search-input-wrap">
           <input
             id="searchInput"
-            class="search-input"
             type="text"
             placeholder="Search products… (e.g. milk, chocolate, chips)"
             autocomplete="off"
           />
-          <button class="search-button" type="submit">
-            Search
-          </button>
-        </form>
+        </div>
+        <button class="search-button" type="submit">Search</button>
+      </form>
 
-        <p id="summary" class="summary">
-          Type a search term above to browse your scraped Walmart catalog.
-        </p>
-      </div>
+      <p id="searchSummary" class="search-summary">
+        Type a search term above to browse your scraped Walmart catalog.
+      </p>
     </section>
 
-    <!-- Results -->
-    <section class="results-section">
-      <div id="results" class="results-grid"></div>
-    </section>
+    <section id="results" aria-live="polite"></section>
   </main>
-
-  <!-- Product detail modal -->
-  <div id="detailOverlay" class="detail-overlay hidden">
-    <div class="detail-backdrop"></div>
-    <div class="detail-modal">
-      <button id="detailClose" class="detail-close" type="button">&times;</button>
-      <div class="detail-body">
-        <div class="detail-image-wrapper">
-          <img id="detailImage" src="" alt="Product image" />
-        </div>
-        <div class="detail-info">
-          <h2 id="detailTitle" class="detail-title"></h2>
-          <p id="detailBrand" class="detail-brand"></p>
-
-          <p id="detailPrice" class="detail-price"></p>
-          <p id="detailUnit" class="detail-unit"></p>
-
-          <p id="detailRating" class="detail-rating"></p>
-          <p id="detailCategory" class="detail-category"></p>
-
-          <div class="detail-links">
-            <a
-              id="detailExternalLink"
-              class="detail-link-primary"
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              View on store →
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script src="script.js" defer></script>
 </body>
