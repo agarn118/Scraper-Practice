@@ -17,7 +17,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-# Default paths (you can change these if you want)
 DEFAULT_DB_PATH = Path("products.db")
 DEFAULT_JSONL_PATH = Path("product_info.jsonl")
 

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SmartSave – Search</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <h1 class="logo">Smart<span>Save</span></h1>
+      <p class="tagline">
+        Search your scraped Walmart catalog by product name or brand.
+      </p>
+
+      <form id="searchForm" class="search-form">
+        <input
+          id="q"
+          type="text"
+          placeholder="Search products… (e.g. milk, chocolate, chips)"
+          autocomplete="off"
+        />
+        <button type="submit">Search</button>
+      </form>
+
+      <div id="summary" class="summary">
+        Type something above and hit <strong>Search</strong> to see results.
+      </div>
+    </header>
+
+    <main id="results" class="results"></main>
+  </div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
