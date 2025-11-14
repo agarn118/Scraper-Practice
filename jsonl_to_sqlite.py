@@ -19,7 +19,7 @@ from typing import Any, Dict, Optional
 
 # Default paths (you can change these if you want)
 DEFAULT_DB_PATH = Path("products.db")
-DEFAULT_JSONL_PATH = Path("woww_product_info.jsonl")
+DEFAULT_JSONL_PATH = Path("product_info.jsonl")
 
 
 # ---------------------- DB SETUP ---------------------- #
