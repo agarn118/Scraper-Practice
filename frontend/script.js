@@ -1,11 +1,11 @@
-// script.js - STORE-SWITCHABLE CART SYSTEM
+// script.js - STORE-WIDE CART SYSTEM
 "use strict";
 
-// Cart items: [{ productId, product, selectedStoreIndex, quantity }]
-window.cartItems = window.cartItems || [];
+// Cart: { selectedStore: 'walmart'|'superstore', items: [{productId, product, quantity}] }
+window.cart = window.cart || { selectedStore: 'walmart', items: [] };
 
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("DOM loaded, initializing store-switchable cart...");
+  console.log("DOM loaded, initializing store-wide cart...");
   
   const resultsEl = document.getElementById("results");
   const searchInputEl = document.getElementById("searchInput");
@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     cartModal.clearBtn.addEventListener("click", () => {
-      window.cartItems = [];
+      window.cart = { selectedStore: window.cart.selectedStore, items: [] };
       updateCartDisplay();
       renderCartModal();
     });
@@ -271,13 +271,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const storeName = offer.store_name || offer.store || "Store";
       const price = offer.price || (typeof offer.price_numeric === "number" ? `$${offer.price_numeric.toFixed(2)}` : "");
       const inventory = offer.inventory_status || "";
-      const isInStock = inventory.toLowerCase().includes("in stock") || inventory.toLowerCase().includes("available");
+      
+      // Only show inventory status if it contains meaningful info (not IN_STOCK)
+      let inventoryDisplay = "";
+      if (inventory && inventory !== "IN_STOCK" && inventory.toLowerCase() !== "in_stock") {
+        const isInStock = inventory.toLowerCase().includes("in stock") || inventory.toLowerCase().includes("available");
+        inventoryDisplay = `<span class="store-option-inventory ${isInStock ? "in-stock" : "out-stock"}">${escapeHtml(inventory)}</span>`;
+      }
 
       storeOption.innerHTML = `
         <div class="store-option-info">
           <span class="store-option-name">${escapeHtml(storeName)}</span>
           <span class="store-option-price">${price}</span>
-          ${inventory ? `<span class="store-option-inventory ${isInStock ? "in-stock" : "out-stock"}">${escapeHtml(inventory)}</span>` : ""}
+          ${inventoryDisplay}
         </div>
         ${offer.link ? `<a href="${offer.link}" target="_blank" rel="noopener noreferrer" class="store-option-link">View</a>` : ""}
       `;
@@ -285,7 +291,6 @@ document.addEventListener("DOMContentLoaded", () => {
       productModal.storeOptionsEl.appendChild(storeOption);
     }
 
-    // Show single add to cart button
     productModal.addToCartBtn.style.display = "inline-block";
     productModal.addToCartBtn.onclick = () => {
       addToCart(product);
@@ -309,33 +314,24 @@ document.addEventListener("DOMContentLoaded", () => {
   function addToCart(product) {
     console.log("Adding product to cart:", product.title);
     
-    // Check if product already in cart
-    const existing = window.cartItems.find((item) => item.productId === product.id);
+    const existing = window.cart.items.find((item) => item.productId === product.id);
     if (existing) {
       existing.quantity += 1;
       console.log("Increased quantity to:", existing.quantity);
     } else {
-      // Default to cheapest store (index 0 after sorting)
-      const sortedOffers = [...product.offers].sort((a, b) => {
-        const priceA = a.price_numeric || 999999;
-        const priceB = b.price_numeric || 999999;
-        return priceA - priceB;
-      });
-      
-      window.cartItems.push({
+      window.cart.items.push({
         productId: product.id,
         product: product,
-        selectedStoreIndex: 0, // Index in sortedOffers
         quantity: 1
       });
-      console.log("Added new item, cart now has:", window.cartItems.length, "items");
+      console.log("Added new item, cart now has:", window.cart.items.length, "items");
     }
 
     updateCartDisplay();
   }
 
   function updateCartDisplay() {
-    console.log("Updating cart display, items:", window.cartItems.length);
+    console.log("Updating cart display, items:", window.cart.items.length);
     
     if (!cartSummaryEl) {
       console.error("cartSummaryEl not found!");
@@ -349,24 +345,27 @@ document.addEventListener("DOMContentLoaded", () => {
     cartSummaryEl.textContent = `Cart · ${totals.itemCount} ${itemText} · ${totalDisplay}`;
   }
 
+  function getOfferForStore(product, storeId) {
+    return product.offers.find(o => o.store === storeId);
+  }
+
   function computeCartTotals() {
     let itemCount = 0;
     let subtotal = 0;
+    const storeId = window.cart.selectedStore;
 
-    for (const entry of window.cartItems) {
-      const sortedOffers = [...entry.product.offers].sort((a, b) => {
-        const priceA = a.price_numeric || 999999;
-        const priceB = b.price_numeric || 999999;
-        return priceA - priceB;
-      });
+    for (const entry of window.cart.items) {
+      const offer = getOfferForStore(entry.product, storeId);
       
-      const selectedOffer = sortedOffers[entry.selectedStoreIndex] || sortedOffers[0];
-      const price = typeof selectedOffer.price_numeric === "number"
-        ? selectedOffer.price_numeric
-        : parseFloat((selectedOffer.price_raw || "").replace("$", "")) || 0;
-
-      itemCount += entry.quantity;
-      subtotal += price * entry.quantity;
+      if (offer) {
+        const price = typeof offer.price_numeric === "number"
+          ? offer.price_numeric
+          : parseFloat((offer.price_raw || offer.price || "").replace("$", "")) || 0;
+        
+        itemCount += entry.quantity;
+        subtotal += price * entry.quantity;
+      }
+      // If item not available at selected store, don't count in totals
     }
 
     const gstRate = 0.05;
@@ -390,9 +389,31 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderCartModal() {
     cartModal.itemsEl.innerHTML = "";
 
-    if (!window.cartItems.length) {
+    // Store selector at top
+    const storeSelector = document.createElement("div");
+    storeSelector.className = "cart-store-selector";
+    storeSelector.innerHTML = `
+      <label for="cartStoreSelect">Shopping at:</label>
+      <select id="cartStoreSelect" class="store-selector-main">
+        <option value="walmart" ${window.cart.selectedStore === 'walmart' ? 'selected' : ''}>Walmart</option>
+        <option value="superstore" ${window.cart.selectedStore === 'superstore' ? 'selected' : ''}>Real Canadian Superstore</option>
+      </select>
+    `;
+    cartModal.itemsEl.appendChild(storeSelector);
+
+    const select = storeSelector.querySelector("#cartStoreSelect");
+    select.addEventListener("change", (e) => {
+      window.cart.selectedStore = e.target.value;
+      updateCartDisplay();
+      renderCartModal();
+    });
+
+    if (!window.cart.items.length) {
       const empty = document.createElement("p");
       empty.textContent = "Your cart is currently empty.";
+      empty.style.textAlign = "center";
+      empty.style.padding = "20px";
+      empty.style.color = "#6b7280";
       cartModal.itemsEl.appendChild(empty);
 
       cartModal.subtotalEl.textContent = "$0.00";
@@ -401,19 +422,14 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    for (const entry of window.cartItems) {
+    const storeId = window.cart.selectedStore;
+
+    for (const entry of window.cart.items) {
       const row = document.createElement("div");
       row.className = "cart-item";
 
-      // Sort offers by price
-      const sortedOffers = [...entry.product.offers].sort((a, b) => {
-        const priceA = a.price_numeric || 999999;
-        const priceB = b.price_numeric || 999999;
-        return priceA - priceB;
-      });
-
-      const selectedOffer = sortedOffers[entry.selectedStoreIndex] || sortedOffers[0];
-      const imgUrl = entry.product.image_url || selectedOffer.image_url || "";
+      const offer = getOfferForStore(entry.product, storeId);
+      const imgUrl = entry.product.image_url || (offer ? offer.image_url : "") || "";
 
       row.innerHTML = `
         <div class="cart-item-image">
@@ -422,7 +438,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="cart-item-details">
           <div class="cart-item-title">${escapeHtml(entry.product.title || "")}</div>
           <div class="cart-item-brand">${escapeHtml(entry.product.brand || "")}</div>
-          <div class="cart-item-store-selector"></div>
+          <div class="cart-item-availability"></div>
         </div>
         <div class="cart-item-controls">
           <div class="cart-item-qty">
@@ -434,31 +450,14 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      // Store selector dropdown
-      const storeSelectorEl = row.querySelector(".cart-item-store-selector");
-      if (sortedOffers.length > 1) {
-        const select = document.createElement("select");
-        select.className = "store-selector";
-        
-        sortedOffers.forEach((offer, idx) => {
-          const option = document.createElement("option");
-          option.value = idx;
-          option.selected = idx === entry.selectedStoreIndex;
-          const price = offer.price || (typeof offer.price_numeric === "number" ? `$${offer.price_numeric.toFixed(2)}` : "");
-          option.textContent = `${offer.store_name || offer.store} - ${price}`;
-          select.appendChild(option);
-        });
-
-        select.addEventListener("change", (e) => {
-          entry.selectedStoreIndex = Number(e.target.value);
-          updateCartDisplay();
-          renderCartModal();
-        });
-
-        storeSelectorEl.appendChild(select);
+      // Show availability
+      const availabilityEl = row.querySelector(".cart-item-availability");
+      if (!offer) {
+        const storeName = storeId === 'walmart' ? 'Walmart' : 'Real Canadian Superstore';
+        availabilityEl.innerHTML = `<span class="unavailable-notice">${storeName} does not have this item</span>`;
       } else {
-        const price = selectedOffer.price || (typeof selectedOffer.price_numeric === "number" ? `$${selectedOffer.price_numeric.toFixed(2)}` : "");
-        storeSelectorEl.textContent = `${selectedOffer.store_name || selectedOffer.store} - ${price}`;
+        const price = offer.price || (typeof offer.price_numeric === "number" ? `$${offer.price_numeric.toFixed(2)}` : "");
+        availabilityEl.innerHTML = `<span class="cart-item-price">${price}</span>`;
       }
 
       // Quantity controls
@@ -470,7 +469,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (entry.quantity > 1) {
           entry.quantity -= 1;
         } else {
-          window.cartItems = window.cartItems.filter((i) => i.productId !== entry.productId);
+          window.cart.items = window.cart.items.filter((i) => i.productId !== entry.productId);
         }
         updateCartDisplay();
         renderCartModal();
@@ -483,7 +482,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       removeBtn.addEventListener("click", () => {
-        window.cartItems = window.cartItems.filter((i) => i.productId !== entry.productId);
+        window.cart.items = window.cart.items.filter((i) => i.productId !== entry.productId);
         updateCartDisplay();
         renderCartModal();
       });
