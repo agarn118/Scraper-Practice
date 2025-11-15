@@ -151,6 +151,9 @@ GROCERY_QUERIES = [
     "orange juice",
     "apple juice",
     "soft drinks",
+    "energy drinks",
+    "water",
+    "mineral water",
     "bottled water",
     "sparkling water",
 ]

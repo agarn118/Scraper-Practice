@@ -38,6 +38,7 @@ body.modal-open {
 /* ----- Header / search area ----- */
 
 .hero-card {
+  position: relative;
   background: #f9fafb;
   border-radius: 26px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
@@ -123,6 +124,43 @@ body.modal-open {
 .search-summary {
   font-size: 13px;
   color: #6b7280;
+}
+
+/* Cart pill in hero */
+
+.cart-pill {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.04);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+}
+
+.cart-pill:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.cart-pill.pulse {
+  animation: cartPulse 0.4s ease;
+}
+
+@keyframes cartPulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* ----- Results grid ----- */
@@ -325,14 +363,21 @@ body.modal-open {
   color: #4b5563;
 }
 
-/* Store link button inside modal */
+/* Modal actions row */
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* store link button inside modal */
 
 .modal-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-top: 12px;
-  align-self: flex-start;
   padding: 8px 16px;
   border-radius: 999px;
   background: #2563eb;
@@ -350,6 +395,33 @@ body.modal-open {
 .modal-link:active {
   transform: translateY(1px);
   box-shadow: 0 7px 18px rgba(37, 99, 235, 0.4);
+}
+
+.modal-link.is-hidden {
+  display: none;
+}
+
+/* Add-to-cart button */
+
+.modal-cart-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.45);
+}
+
+.modal-cart-btn:hover {
+  filter: brightness(1.05);
+}
+
+.modal-cart-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 7px 18px rgba(16, 185, 129, 0.4);
 }
 
 /* Close button */
@@ -385,6 +457,492 @@ body.modal-open {
 
   .hero-card {
     padding: 20px 18px 18px;
+  }
+
+  .cart-pill {
+    position: static;
+    margin-top: 6px;
+    align-self: flex-end;
+  }
+
+  .product-modal {
+    padding: 18px 16px;
+  }
+
+  .modal-body {
+    flex-direction: column;
+  }
+
+  .modal-image-wrap {
+    flex-basis: auto;
+    justify-content: center;
+  }
+}
+/* ----- Global layout ----- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+  color: #0f172a;
+  background: radial-gradient(circle at top left, #e0f2fe, #e0f2fe 35%, #bfdbfe);
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+/* When modal is open, lock scroll a bit */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* Main shell */
+
+.app-shell {
+  width: 100%;
+  max-width: 1000px;
+}
+
+/* ----- Header / search area ----- */
+
+.hero-card {
+  position: relative;
+  background: #f9fafb;
+  border-radius: 26px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+  padding: 28px 32px 24px;
+  margin-bottom: 24px;
+}
+
+.hero-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.logo {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #0f172a;
+}
+
+.logo span {
+  color: #2563eb;
+}
+
+.hero-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* Search form */
+
+.search-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.search-input-wrap {
+  flex: 1;
+  position: relative;
+}
+
+#searchInput {
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#searchInput:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.search-button {
+  padding: 10px 24px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.4);
+  white-space: nowrap;
+}
+
+.search-button:hover {
+  filter: brightness(1.05);
+}
+
+.search-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
+}
+
+.search-summary {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Cart pill in hero */
+
+.cart-pill {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.04);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+}
+
+.cart-pill:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.cart-pill.pulse {
+  animation: cartPulse 0.4s ease;
+}
+
+@keyframes cartPulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ----- Results grid ----- */
+
+#results {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px;
+}
+
+/* Product cards */
+
+.product-card {
+  border-radius: 22px;
+  border: 1px solid #dbeafe;
+  background: #f9fafb;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  padding: 10px 10px 14px;
+  cursor: pointer;
+  display: block;
+  text-align: left;
+  transition: transform 0.14s ease, box-shadow 0.14s ease,
+    border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-3px);
+  border-color: #bfdbfe;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+}
+
+.card-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.product-image-wrap {
+  border-radius: 18px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.product-image-wrap img {
+  max-width: 140px;
+  max-height: 170px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.product-info {
+  padding: 4px 4px 0;
+}
+
+.product-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.product-brand {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 4px;
+}
+
+.product-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1d4ed8;
+  margin: 0 0 2px;
+}
+
+.product-category {
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* Empty state */
+
+.empty-state {
+  grid-column: 1 / -1;
+  padding: 20px 18px;
+  border-radius: 16px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 14px;
+}
+
+/* ----- Modal / details overlay ----- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 50;
+}
+
+.modal-overlay.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+}
+
+/* Modal box itself */
+
+.product-modal {
+  position: relative;
+  z-index: 51;
+  max-width: 900px;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 26px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.45);
+  padding: 24px 26px;
+  display: flex;
+  gap: 24px;
+}
+
+.modal-body {
+  display: flex;
+  gap: 24px;
+  width: 100%;
+}
+
+.modal-image-wrap {
+  flex: 0 0 260px;
+  border-radius: 22px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-image-wrap img {
+  max-width: 210px;
+  max-height: 260px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.modal-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.modal-content h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.modal-brand {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.modal-price {
+  margin: 8px 0 2px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.modal-rating,
+.modal-category,
+.modal-description {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+/* Modal actions row */
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* store link button inside modal */
+
+.modal-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.45);
+}
+
+.modal-link:hover {
+  filter: brightness(1.05);
+}
+
+.modal-link:active {
+  transform: translateY(1px);
+  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.4);
+}
+
+.modal-link.is-hidden {
+  display: none;
+}
+
+/* Add-to-cart button */
+
+.modal-cart-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.45);
+}
+
+.modal-cart-btn:hover {
+  filter: brightness(1.05);
+}
+
+.modal-cart-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 7px 18px rgba(16, 185, 129, 0.4);
+}
+
+/* Close button */
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  background: #d1d5db;
+}
+
+/* ----- Responsive tweaks ----- */
+
+@media (max-width: 768px) {
+  body {
+    padding: 20px 10px;
+  }
+
+  .hero-card {
+    padding: 20px 18px 18px;
+  }
+
+  .cart-pill {
+    position: static;
+    margin-top: 6px;
+    align-self: flex-end;
   }
 
   .product-modal {
