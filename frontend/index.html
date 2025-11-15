@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SmartSave – Search</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <section class="hero-card">
+      <div class="hero-header">
+        <div class="logo">
+          Smart<span>Save</span>
+        </div>
+        <p class="hero-subtitle">
+          Search your scraped Walmart catalog by product name or brand.
+        </p>
+      </div>
+
+      <form id="searchForm" class="search-form">
+        <div class="search-input-wrap">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Search products… (e.g. milk, chocolate, chips)"
+            autocomplete="off"
+          />
+        </div>
+        <button type="submit" class="search-button">Search</button>
+      </form>
+
+      <p id="searchSummary" class="search-summary">
+        Type a search term above to browse your scraped Walmart catalog.
+      </p>
+
+      <!-- Cart summary pill -->
+      <button id="cartFab" class="cart-pill" type="button">
+        Cart · 0 items · $0.00
+      </button>
+    </section>
+
+    <!-- Search results -->
+    <main id="results" aria-live="polite"></main>
+  </div>
+
+  <!-- Product modal -->
+  <div id="modalOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal-backdrop" data-role="modal-backdrop"></div>
+
+    <div
+      class="product-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalTitle"
+    >
+      <button
+        type="button"
+        class="modal-close"
+        id="modalCloseBtn"
+        aria-label="Close product details"
+      >
+        ×
+      </button>
+
+      <div class="modal-body">
+        <div class="modal-image-wrap">
+          <img id="modalImage" src="" alt="Product image" />
+        </div>
+
+        <div class="modal-content">
+          <h2 id="modalTitle"></h2>
+          <p id="modalBrand" class="modal-brand"></p>
+          <p id="modalPrice" class="modal-price"></p>
+          <p id="modalRating" class="modal-rating"></p>
+          <p id="modalCategory" class="modal-category"></p>
+          <p id="modalDescription" class="modal-description"></p>
+
+          <div class="modal-actions">
+            <a
+              id="modalStoreLink"
+              class="modal-link is-hidden"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on Walmart
+            </a>
+            <button
+              id="addToCartBtn"
+              type="button"
+              class="modal-cart-btn"
+            >
+              Add to cart
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
