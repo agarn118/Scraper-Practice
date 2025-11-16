@@ -3,6 +3,7 @@ import requests
 import json
 import time
 import random
+from pathlib import Path
 
 # -------------- HTTP CONFIG -------------- #
 
@@ -16,6 +17,14 @@ HEADERS = {
 TIMEOUT = 15
 SESSION = requests.Session()
 BASE_URL = "https://www.realcanadiansuperstore.ca"
+
+# -------------- PATHS -------------- #
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+RAW_DIR = DATA_DIR / "raw"
+
+OUTPUT_FILE = RAW_DIR / "superstore_product_info.jsonl"
 
 # -------------- CONFIG -------------- #
 SLEEP_MIN = 0.3
@@ -176,17 +185,13 @@ def sleep_between_queries():
 def extract_products_from_json(json_data):
     """Extract product data from __NEXT_DATA__ JSON."""
     try:
-        # Navigate to the product data
         page_props = json_data.get("props", {}).get("pageProps", {})
-        
-        # For search pages, data is in initialSearchData
         search_data = page_props.get("initialSearchData", {})
         layout = search_data.get("layout", {})
         sections = layout.get("sections", {})
         
         products = []
         
-        # Look through all sections for product grids
         for section_name, section_data in sections.items():
             if not isinstance(section_data, dict):
                 continue
@@ -199,11 +204,9 @@ def extract_products_from_json(json_data):
                 
                 comp_id = component.get("componentId", "")
                 
-                # Only process productGridComponent
                 if comp_id != "productGridComponent":
                     continue
                 
-                # The product data is directly in the component's data
                 comp_data = component.get("data", {})
                 product_tiles = comp_data.get("productTiles", [])
                 
@@ -222,7 +225,6 @@ def extract_products_from_json(json_data):
 def parse_product(product_data, search_query):
     """Parse a single product tile into a clean dict."""
     try:
-        # Basic info
         info = {
             "search_query": search_query,
             "product_id": product_data.get("productId", ""),
@@ -234,35 +236,29 @@ def parse_product(product_data, search_query):
             "link": BASE_URL + product_data.get("link", "") if product_data.get("link") else "",
         }
         
-        # Pricing
         pricing = product_data.get("pricing", {})
         if pricing:
             info["price"] = pricing.get("displayPrice", "")
             info["was_price"] = pricing.get("wasPrice", "")
             info["price_raw"] = pricing.get("price", "")
         
-        # Deal info
         deal = product_data.get("deal", {})
         if deal:
             info["deal_type"] = deal.get("type", "")
             info["deal_text"] = deal.get("text", "")
             
-        # Inventory
         inventory = product_data.get("inventoryIndicator", {})
         if inventory:
             info["inventory_status"] = inventory.get("text", "")
             
-        # Badge
         badge = product_data.get("productBadge", {})
         if badge:
             info["badge"] = badge.get("text", "")
             
-        # Image
         images = product_data.get("productImage", [])
         if images:
             info["image_url"] = images[0].get("largeUrl", "")
         
-        # Sponsored/offer type
         info["offer_type"] = product_data.get("offerType", "")
         info["is_sponsored"] = product_data.get("isSponsored", False)
         
@@ -299,24 +295,19 @@ def scrape_query(query, seen_product_ids):
             print(f"    ✗ Error fetching page {page}: {e}")
             break
         
-        # Parse HTML
         soup = BeautifulSoup(response.text, "html.parser")
-        
-        # Find __NEXT_DATA__ script
         script_tag = soup.find("script", id="__NEXT_DATA__")
         
         if not script_tag or not script_tag.string:
             print(f"    ✗ No __NEXT_DATA__ found on page {page}")
             break
         
-        # Parse JSON
         try:
             json_data = json.loads(script_tag.string)
         except json.JSONDecodeError as e:
             print(f"    ✗ JSON decode error on page {page}: {e}")
             break
         
-        # Extract products from JSON
         products = extract_products_from_json(json_data)
         
         if not products:
@@ -327,7 +318,6 @@ def scrape_query(query, seen_product_ids):
         
         print(f"    Found {len(products)} products on page")
         
-        # Parse and collect unique products
         new_products = 0
         for product_data in products:
             product_id = product_data.get("productId", "")
@@ -343,7 +333,6 @@ def scrape_query(query, seen_product_ids):
         
         print(f"    ✓ Added {new_products} new products")
         
-        # Check if there are more pages
         try:
             page_props = json_data.get("props", {}).get("pageProps", {})
             search_data = page_props.get("initialSearchData", {})
@@ -382,7 +371,8 @@ def scrape_query(query, seen_product_ids):
 # -------------- MAIN -------------- #
 
 def main():
-    OUTPUT_FILE = "superstore_product_info.jsonl"
+    # Ensure directories exist
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
     
     print("\n" + "="*60)
     print("REAL CANADIAN SUPERSTORE SCRAPER")
@@ -394,7 +384,6 @@ def main():
     all_products = []
     seen_product_ids = set()
     
-    # Scrape each query
     for idx, query in enumerate(GROCERY_QUERIES, 1):
         print(f"\n[Query {idx}/{len(GROCERY_QUERIES)}]")
         
@@ -410,11 +399,9 @@ def main():
         
         print(f"  ✓ Progress saved to {OUTPUT_FILE}")
         
-        # Sleep between queries (except after the last one)
         if idx < len(GROCERY_QUERIES):
             sleep_between_queries()
     
-    # Final summary
     print("\n" + "="*60)
     print("SCRAPING COMPLETE!")
     print("="*60)
@@ -422,7 +409,6 @@ def main():
     print(f"Total queries scraped: {len(GROCERY_QUERIES)}")
     print(f"Output saved to: {OUTPUT_FILE}")
     
-    # Print category breakdown
     print("\nCategory breakdown:")
     query_counts = {}
     for product in all_products:
@@ -432,7 +418,6 @@ def main():
     for query, count in sorted(query_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
         print(f"  {query}: {count} products")
     
-    # Print sample products
     print("\nSample products:")
     for i, product in enumerate(all_products[:5], 1):
         print(f"\n{i}. {product['brand']} - {product['title']}")

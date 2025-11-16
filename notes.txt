@@ -1,0 +1,9 @@
+superstore_product_info = 14996
+walmart_product_info = 1344
+
+
+========== Run order ==========
+master_scraper.py
+advanced_product_matcher.py
+build_frontend.py
+app.py
